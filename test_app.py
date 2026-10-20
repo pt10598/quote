@@ -27,3 +27,16 @@ class Tests(unittest.TestCase):
  def test_invalid_login(self):self.assertEqual(self.call('/api/login',{'email':'none@example.test','password':'bad-password-123'})['status'],401)
  def test_page(self):self.assertIn(b'DEMO PILOT',self.call('/')['body'])
 if __name__=='__main__':unittest.main()
+
+class RealQuoteTests(unittest.TestCase):
+ def test_live_excludes_demo_and_validates_identity(self):
+  from import_quotes import import_rows
+  old=app.DEMO;app.DEMO=False
+  try:
+   t=Tests();self.assertEqual(t.call('/api/catalog')['body']['offers'],[])
+   row={'product':'verified-valve','name':'Verified valve','spec':'1/2 in threaded','model':'TEST-MODEL','store':'test-store','store_name':'Test store','store_address':'Plano test fixture','source_url':'https://example.com/valve','source_type':'api','match_key':'TEST-MODEL-1','currency':'USD','price_basis':'public','store_verified':True,'pack_quantity':1,'price':9.99,'stock':None,'observed_at':'2026-01-01T00:00:00Z'}
+   with self.assertRaises(ValueError):import_rows([{**row,'store_verified':False}])
+   self.assertEqual(import_rows([row]),1)
+   result=t.call('/api/catalog')['body'];self.assertEqual(len(result['offers']),1);self.assertEqual(result['offers'][0]['price'],9.99);self.assertFalse(result['demo'])
+   with self.assertRaises(ValueError):import_rows([{**row,'store':'other','model':'DIFFERENT'}])
+  finally:app.DEMO=old

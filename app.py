@@ -53,7 +53,8 @@ def init():
         CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER,csrf TEXT,expires REAL);
         CREATE TABLE IF NOT EXISTS lists(id INTEGER PRIMARY KEY,user_id INTEGER,name TEXT,zip TEXT,items TEXT,created REAL);
         CREATE TABLE IF NOT EXISTS offers(product TEXT,store TEXT,price REAL,stock INTEGER,observed REAL,PRIMARY KEY(product,store));
-        CREATE TABLE IF NOT EXISTS attempts(ip TEXT,at REAL);''')
+        CREATE TABLE IF NOT EXISTS attempts(ip TEXT,at REAL);
+        CREATE TABLE IF NOT EXISTS verified_quotes(product TEXT,store TEXT,payload TEXT,observed REAL,PRIMARY KEY(product,store));''')
         if DEMO:
             for i,p in enumerate(PRODUCTS):
                 for j,s in enumerate(STORES):
@@ -121,18 +122,23 @@ def application(env,start):
         with db() as c:c.execute('DELETE FROM sessions WHERE token=?',(user['token'],))
         return reply({'ok':True},headers=[('Set-Cookie','plano_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax')])
     if path=='/api/catalog':
-        with db() as c: rows=[dict(r) for r in c.execute('SELECT * FROM offers')]
+        products=PRODUCTS;stores=STORES
+        with db() as c:
+            rows=[dict(r) for r in c.execute('SELECT * FROM offers')] if DEMO else [json.loads(r[0]) for r in c.execute('SELECT payload FROM verified_quotes')]
+        if not DEMO:
+            products=list({r['product']:{'id':r['product'],'name':r['name'],'spec':r['spec'],'category':r.get('category','Plumbing')} for r in rows}.values())
+            stores=list({r['store']:{'id':r['store'],'name':r['store_name'],'address':r['store_address'],'url':r['source_url']} for r in rows}.values())
         for r in rows:
             age=time.time()-r['observed'];r['price_stale']=age>PRICE_TTL;r['stock_stale']=age>STOCK_TTL
-            r['observed_at']=datetime.fromtimestamp(r['observed'],timezone.utc).isoformat();r['source']='SIMULATED — NOT SUPPLIER DATA'
-        return reply({'products':PRODUCTS,'stores':STORES,'offers':rows,'demo':DEMO,'policy':{'price_seconds':PRICE_TTL,'stock_seconds':STOCK_TTL},'full_access':bool(user)})
+            r['observed_at']=datetime.fromtimestamp(r['observed'],timezone.utc).isoformat();r['source']='SIMULATED — NOT SUPPLIER DATA' if DEMO else r['source_type']
+        return reply({'products':products,'stores':stores,'offers':rows,'demo':DEMO,'policy':{'price_seconds':PRICE_TTL,'stock_seconds':STOCK_TTL},'full_access':bool(user)})
     if path=='/api/lists':
         if not user:return reply({'error':'Sign in to save lists'},'401 Unauthorized')
         with db() as c:
             if method=='POST':
                 items=data.get('items',[]); zipcode=str(data.get('zip',''))
                 if zipcode not in ('75023','75024','75025','75074','75075','75093','75094'):return reply({'error':'Choose a supported Plano ZIP code'},'400 Bad Request')
-                ids={p['id'] for p in PRODUCTS}
+                ids={p['id'] for p in PRODUCTS} if DEMO else {r[0] for r in c.execute('SELECT DISTINCT product FROM verified_quotes')}
                 if not isinstance(items,list) or not 1<=len(items)<=50:return reply({'error':'Add 1–50 items'},'400 Bad Request')
                 if any(not isinstance(x,dict) or x.get('id') not in ids or type(x.get('qty')) is not int or not 1<=x['qty']<=999 for x in items):return reply({'error':'Invalid items'},'400 Bad Request')
                 c.execute('INSERT INTO lists(user_id,name,zip,items,created) VALUES(?,?,?,?,?)',(user['user_id'],str(data.get('name','My list'))[:100],zipcode,json.dumps(items),time.time()))

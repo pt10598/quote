@@ -74,3 +74,15 @@ Heroku 未設定 DATABASE_URL 會拒絕啟動，避免誤用暫存 SQLite。正�
 ```sh
 python -m unittest test_app.py
 ```
+
+## V1.1 比價模式更新
+
+- 預設直接瀏覽各商品的各店報價，不需先組採購單，也不提供下單。
+- DEMO_MODE=1 顯示原示範報價；DEMO_MODE=0 僅讀 verified_quotes，舊 offers 示範資料不會出現在真實模式。
+- 尚未連接 Home Depot / Lowe’s 真實 API 或爬蟲，也沒有背景自動抓取；目前只能匯入已正規化的 API/爬蟲輸出。
+- 資料介面：供應商 adapter 將結果輸出為 JSON 陣列，執行 `python import_quotes.py quotes.json` 匯入。不能把供應商原始 JSON 直接當此格式使用。
+- 每筆必填欄位：product（跨店同款ID）、name、spec、model、store（門市ID）、store_name、store_address、source_url（HTTPS商品頁）、source_type（api/webpage）、match_key（已核對的同款識別碼）、currency（USD）、price_basis（public）、store_verified（true）、pack_quantity（正整數）、price（正數）、stock（非負整數或null）、observed_at（含時區的ISO時間）。
+- store_verified 是 adapter/管理者對門市已核對的聲明，匯入器無法獨立證實供應商資料真偽；必須對原頁或官方 API 核對。
+- 型號/包裝衝突、非USD、會員價、門市未確認、倒退時間與無效數值會被拒絕；不對不同規格進行最低價排名。
+- 未取得資料時顯示空白狀態，不用示範價冒充。供應商特有 adapter 必須等實際接口、商用條件和範例資料確定後實作。
+- 本次修改只在程式包中，請自行上傳 GitHub 後重新部署。正式 API 金鑰只能放 Heroku Config Vars，不能上傳 GitHub。
