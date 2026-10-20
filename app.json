@@ -1,0 +1,23 @@
+{
+  "name": "Plano Supply Desk",
+  "description": "Python procurement demo; PostgreSQL required.",
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ],
+  "env": {
+    "DEMO_MODE": {
+      "value": "1"
+    },
+    "COOKIE_SECURE": {
+      "value": "1"
+    },
+    "PRICE_TTL_SECONDS": {
+      "value": "3600"
+    },
+    "STOCK_TTL_SECONDS": {
+      "value": "900"
+    }
+  }
+}
